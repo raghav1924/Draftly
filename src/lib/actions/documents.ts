@@ -150,3 +150,31 @@ export async function deleteDocumentAction(id: string): Promise<ActionResult> {
   revalidatePath("/dashboard");
   return { success: true, data: undefined };
 }
+
+export async function updateDocumentContentAction(
+  id: string,
+  content: unknown,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.from("documents") as any)
+    .update({ content })
+    .eq("id", id);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/documents/${id}`);
+  return { success: true, data: undefined };
+}
+
