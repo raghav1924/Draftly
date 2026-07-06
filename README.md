@@ -1,131 +1,147 @@
-# Draftly
+# 📝 Draftly — Premium Collaborative Workspace
 
-Draftly is a premium, high-performance collaborative document workspace built using Next.js 15, Supabase, TipTap Editor, and Tailwind CSS v4. It features real-time debounced autosave, document sharing, permission-level gating, and file imports.
-
----
-
-## 🛠 Tech Stack
-
-- **Framework**: [Next.js 15 (App Router)](https://nextjs.org/)
-- **Database & Auth**: [Supabase](https://supabase.com/) with Postgres RLS
-- **Rich Text Editor**: [TipTap Editor](https://tiptap.dev/)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
-- **State Management**: React Server Actions & Transitions
-- **Form Validation**: [Zod](https://zod.dev/)
+Draftly is a high-performance, collaborative document editor built on modern web technologies. Featuring real-time autosaving, strict security controls, and document sharing, it provides a workspace experience designed to impress.
 
 ---
 
-## 🏗 System Architecture
+## ✨ Features Highlight
+
+*   **⚡ Real-Time Debounced Autosave**: Saves changes automatically after 1.5 seconds of user inactivity with live header indicators.
+*   **🔒 Secure Document Sharing**: Grant Viewer or Editor access permissions to users by email address.
+*   **📁 File Import (.txt & .md)**: Parses and loads local files directly into formatted editor nodes.
+*   **👁️ viewer Enforced Modes**: Viewers are locked into a secure read-only mode where edit triggers and toolbars are hidden.
+*   **🛡️ Postgres Row Level Security (RLS)**: Fine-grained security policies enforced directly at the database engine level.
+
+---
+
+## 🛠️ Tech Stack & Dev Tooling
+
+| Layer | Technology |
+| :--- | :--- |
+| **Framework** | Next.js 15 (App Router, Server Actions, Transitions) |
+| **Database & Auth** | Supabase (PostgreSQL, Row Level Security) |
+| **Rich Text Engine** | TipTap Editor Framework |
+| **Styles & Theme** | Tailwind CSS v4 (Glassmorphic layouts, Dark-mode aesthetics) |
+| **Form Safety** | Zod (Schemas validation) |
+| **Build System** | pnpm v11 package manager |
+
+---
+
+## 🏗️ System Architecture & Mechanics
 
 ```mermaid
-graph TD
-    A[Client Browser] -->|Auth & Database Actions| B[Next.js Server Actions]
-    A -->|Static Assets & Pages| C[Next.js App Router]
-    B -->|Query & Mutations| D[Supabase Server Client]
-    D -->|PostgreSQL| E[Supabase DB with RLS]
-    E -->|Profile Trigger| F[Auth Users Creation]
+sequenceDiagram
+    participant User as Client Browser
+    participant App as Next.js Server Actions
+    participant Auth as Supabase Auth Client
+    participant DB as PostgreSQL (RLS Policies)
+
+    User->>App: Submits credentials
+    App->>Auth: signInWithPassword()
+    Auth->>User: Resolves session cookies
+    User->>DB: Query profiles/documents
+    DB-->>User: Verifies RLS Policies & Returns Data
 ```
 
-### 1. Authentication & Route Protection
-- **Supabase SSR**: Middleware (`src/lib/supabase/middleware.ts`) automatically intercepts incoming requests to manage sessions, refreshing access tokens and redirecting unauthorized traffic:
-  - Public routes: `/`, `/login`, `/signup`
-  - Protected routes: `/dashboard`, `/documents/[id]`
-- **Auto-Sync Profiles**: A PostgreSQL trigger `on_auth_user_created` in `supabase/migrations/001_initial_schema.sql` automatically populates the `public.profiles` table whenever a user registers.
+### 1. The Autosave Engine
+To avoid redundant network requests, Draftly implements a custom debounced saving hook:
+*   **Callback**: TipTap’s `onUpdate` listener triggers when a user modifies text.
+*   **Debounce (1500ms)**: The save timeout resets on keystrokes. Once typing pauses for 1.5 seconds, `updateDocumentContentAction` is dispatched.
+*   **Visual States**: Indicates `Synced`, `Saving...`, or `Error` in the editor navigation header.
+*   **Loss Prevention**: Intercepts browser `beforeunload` events to prevent tab closure while saving is active.
 
-### 2. Row Level Security (RLS)
-The database enforces strict privacy constraints at the Postgres engine level:
-- **Profiles**: Users can only select or update their own profile records.
-- **Documents**: 
-  - Owners have full CRUD capabilities.
-  - Shared collaborators can only select or update documents depending on active permissions.
-- **Document Shares**:
-  - Document owners have complete share privileges.
-  - Recipients can select their own shared records.
+### 2. Solving RLS Infinite Recursion (Postgres Architecture)
+A major challenge in collaborative RLS architectures is circular policy execution. For example:
+- Checking if a user can **read a document** requires checking their permissions in the `document_shares` table.
+- Checking if a user can **read a share** requires checking if they are the owner in the `documents` table.
 
-### 3. Rich Text Editing & Debounced Autosave
-- **TipTap Core**: Configured with the `StarterKit` bundle and custom styling rules.
-- **Autosave Engine**: Monitored via the TipTap `onUpdate` callback. When the user stops typing, changes trigger a **1.5-second debounced timeout** executing the `updateDocumentContentAction` server action.
-- **Save Status Bar**: The editor header renders real-time sync indicators (`Synced to cloud`, `Saving changes...`, `Auto-save error`).
-- **Tab Protection**: A browser `beforeunload` event handler prevents users from closing the tab while save events are in progress.
+This creates a loop causing PostgreSQL to throw `infinite recursion detected (42P17)`.
 
-### 4. File Imports (.txt, .md)
-- **Local Parsing**: Documents can be imported from local `.txt` or `.md` files.
-- **Markdown Parser**: An offline regex reader translates headings (`#`, `##`, `###`), blockquotes (`>`), and standard lines of text into structured JSON nodes before database insertion.
+#### 💡 The Solution: Security Definer Helper
+Draftly resolves this circular reference by executing the check inside a `security definer` helper function that queries the tables bypassing RLS rules:
+
+```sql
+create or replace function public.check_document_owner(doc_id uuid, user_id uuid)
+returns boolean
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1 from public.documents
+    where id = doc_id and owner_id = user_id
+  );
+end;
+$$ language plpgsql;
+```
+
+This function is then hooked directly into the RLS policies:
+```sql
+create policy "Owners can manage shares"
+  on public.document_shares for all
+  using (public.check_document_owner(document_id, auth.uid()));
+```
 
 ---
 
-## 📁 Folder Structure
+## 📁 Repository Structure
 
 ```text
 ├── supabase/               # Migrations and SQL schemas
 ├── public/                 # Static assets and icons
 ├── src/
-│   ├── app/                # Next.js App Router & Route Groups
-│   │   ├── (auth)/         # Login, Signup, and Auth Layout
-│   │   ├── (dashboard)/    # Dashboard and Document Editor Page
-│   │   ├── globals.css     # Tailwind imports and TipTap styling rules
-│   │   └── layout.tsx      # Main layout mounting ThemeProvider & Toasters
+│   ├── app/                # Next.js App Router (Auth/Dashboard layouts)
+│   │   ├── (auth)/         # LoginPage, SignupPage
+│   │   ├── (dashboard)/    # Dashboard list & TipTap editor view
+│   │   ├── globals.css     # CSS rules & TipTap styles
+│   │   └── middleware.ts   # Edge Session validation
 │   ├── components/         # React Components
-│   │   ├── dashboard/      # Sidebar, Document Card, and Rename Dialog
-│   │   ├── editor/         # Editor Toolbar and TipTap Canvas
-│   │   ├── providers/      # Next-Themes provider
-│   │   └── ui/             # Shadcn reusable components
-│   ├── lib/                # Core utilities
-│   │   ├── actions/        # Server Actions (Auth, Documents, Sharing)
-│   │   ├── supabase/       # SSR client, server, and middleware helpers
-│   │   ├── utils/          # Utility functions
-│   │   └── validations/    # Zod validation schemas
-│   └── types/              # TypeScript types and Database interface
+│   │   ├── dashboard/      # Sidebar, Document Card, Rename Dialog
+│   │   ├── editor/         # Editor Toolbar, Share Dialog
+│   │   └── ui/             # Reusable design assets
+│   ├── lib/                # Backend Actions & Supabase instances
+│   └── types/              # Database schema typings
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Local Installation & Run
 
 ### 1. Prerequisites
 - **Node.js** (v20+)
 - **pnpm** (v11+)
-- **Supabase CLI** (Optional, for local development)
 
-### 2. Database Setup
-Ensure your Supabase project contains the initial schemas. Apply the migration SQL:
-```bash
-# Run migrations using Supabase CLI
-supabase db push
-# Or copy the content from supabase/migrations/001_initial_schema.sql directly into the Supabase SQL Editor
-```
+### 2. Database Migration Setup
+Apply the schema and security policies to your Supabase instance:
+1. Copy the contents of `supabase/migrations/001_initial_schema.sql`.
+2. Paste it in your **Supabase Project SQL Editor** and click **Run**.
+3. In **Authentication -> Providers -> Email**, disable the **Confirm email** toggle.
 
 ### 3. Environment Variables
-Create a `.env.local` file in the root directory:
+Create a `.env.local` file in your root directory:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anonymous-key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anonymous-anon-key
 ```
 
-### 4. Installation & Local Development
+### 4. Running the Project
 ```bash
 # Install dependencies
 pnpm install
 
-# Approve postinstall builds
-pnpm approve-builds
-
-# Run development server
+# Build dev server
 pnpm dev
 ```
-Open [http://localhost:3000](http://localhost:3000) to view the application.
-
-### 5. Build for Production
-To build the application for deployment:
-```bash
-pnpm build
-```
+Access the application at `http://localhost:3000`.
 
 ---
 
-## 🌐 Production Deployment
+## 🌐 Production Deployments
 
-Deploy the application to **Vercel** with the following options:
-1. Link your GitHub repository to Vercel.
-2. Configure **Environment Variables** (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) in the project settings.
-3. Vercel will automatically detect Next.js configurations and execute `npm run build`.
+### Netlify Deployment
+Draftly is pre-configured for Netlify hosting out of the box using **`netlify.toml`**:
+
+1. Link your GitHub repository to Netlify.
+2. Add your Supabase keys under **Environment variables** (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+3. Under **Build & deploy settings**, keep **Base directory** empty/blank and **Publish directory** as `.next`.
+4. Netlify automatically loads the `@netlify/plugin-nextjs` runtime to handle Next.js SSR functions.
