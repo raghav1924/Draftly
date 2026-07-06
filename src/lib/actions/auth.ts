@@ -34,7 +34,7 @@ export async function loginAction(
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  return { success: true, data: undefined };
 }
 
 export async function signUpAction(
@@ -101,11 +101,17 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     return null;
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
+
+  if (error) {
+    console.error("getCurrentProfile error:", error);
+  } else {
+    console.log("getCurrentProfile success:", profile);
+  }
 
   return profile as Profile | null;
 }

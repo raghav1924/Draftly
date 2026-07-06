@@ -65,6 +65,20 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- Helper function to break recursion in RLS policies by querying documents as security definer
+create or replace function public.check_document_owner(doc_id uuid, user_id uuid)
+returns boolean
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1 from public.documents
+    where id = doc_id and owner_id = user_id
+  );
+end;
+$$ language plpgsql;
+
 alter table public.profiles enable row level security;
 alter table public.documents enable row level security;
 alter table public.document_shares enable row level security;
@@ -105,13 +119,7 @@ create policy "Shared editors can update documents"
 
 create policy "Owners can manage shares"
   on public.document_shares for all
-  using (
-    exists (
-      select 1 from public.documents d
-      where d.id = document_shares.document_id
-        and d.owner_id = auth.uid()
-    )
-  );
+  using (public.check_document_owner(document_id, auth.uid()));
 
 create policy "Recipients can view own shares"
   on public.document_shares for select

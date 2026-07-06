@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileText, MoreVertical, Edit2, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -21,9 +22,14 @@ export function DocumentCard({
   permission,
   onRename,
 }: DocumentCardProps) {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
+
+  const handleCardClick = () => {
+    router.push(`/documents/${document.id}`);
+  };
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -75,7 +81,10 @@ export function DocumentCard({
         isDeleting && "opacity-40 pointer-events-none"
       )}
     >
-      <Link href={`/documents/${document.id}`} className="flex-1 flex flex-col justify-between">
+      <div 
+        onClick={handleCardClick} 
+        className="flex-1 flex flex-col justify-between cursor-pointer"
+      >
         <div>
           {/* Header & Icon */}
           <div className="flex items-start justify-between">
@@ -156,7 +165,7 @@ export function DocumentCard({
             </span>
           )}
         </div>
-      </Link>
+      </div>
     </div>
   );
 }

@@ -32,6 +32,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  console.log("--- middleware check ---");
+  console.log("pathname:", pathname);
+  console.log("cookies:", request.cookies.getAll().map(c => c.name));
+  console.log("user:", user ? user.email : "null");
+
   const isAuthRoute = pathname.startsWith("/login");
   const isProtectedRoute =
     pathname.startsWith("/dashboard") || pathname.startsWith("/documents");

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
+import { useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { loginAction } from "@/lib/actions/auth";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -22,6 +25,7 @@ export default function LoginPage() {
         toast.error(result.error);
       } else {
         toast.success("Logged in successfully!");
+        router.push("/dashboard");
       }
     });
   };
