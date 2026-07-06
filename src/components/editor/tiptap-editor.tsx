@@ -12,6 +12,7 @@ import { EditorToolbar } from "@/components/editor/editor-toolbar";
 import { ShareDialog } from "@/components/editor/share-dialog";
 import { updateDocumentContentAction } from "@/lib/actions/documents";
 import type { Document } from "@/types/database";
+import { cn } from "@/lib/utils/cn";
 
 interface TipTapEditorProps {
   document: Document;

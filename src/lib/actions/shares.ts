@@ -38,15 +38,17 @@ export async function shareDocumentAction(
   const targetEmail = email.trim().toLowerCase();
 
   // Find user by email
-  const { data: targetUser, error: userError } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("profiles")
     .select("*")
     .eq("email", targetEmail)
     .single();
 
-  if (userError || !targetUser) {
+  if (userError || !userData) {
     return { success: false, error: "User not found with this email address" };
   }
+
+  const targetUser = userData as unknown as Profile;
 
   // Check if they are the document owner
   const { data: doc } = (await supabase

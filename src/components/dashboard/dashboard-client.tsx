@@ -5,7 +5,7 @@ import { Search, FileText } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { DocumentCard } from "@/components/dashboard/document-card";
 import { RenameDialog } from "@/components/dashboard/rename-dialog";
-import { createDocumentAction } from "@/lib/actions/documents";
+import { createDocumentAction, createDocumentWithContentAction } from "@/lib/actions/documents";
 import { toast } from "sonner";
 import type { Document, SharePermission } from "@/types/database";
 
@@ -26,6 +26,8 @@ export function DashboardClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreating, startCreateTransition] = useTransition();
 
+  const [isImporting, startImportTransition] = useTransition();
+
   // Rename Dialog State
   const [renameState, setRenameState] = useState<{
     isOpen: boolean;
@@ -40,6 +42,15 @@ export function DashboardClient({
   const handleCreateDocument = () => {
     startCreateTransition(async () => {
       const res = await createDocumentAction();
+      if (res && !res.success) {
+        toast.error(res.error);
+      }
+    });
+  };
+
+  const handleImportDocument = (title: string, content: unknown) => {
+    startImportTransition(async () => {
+      const res = await createDocumentWithContentAction(title, content);
       if (res && !res.success) {
         toast.error(res.error);
       }
@@ -69,6 +80,8 @@ export function DashboardClient({
         setActiveTab={setActiveTab}
         onCreateDocument={handleCreateDocument}
         isCreating={isCreating}
+        onImportDocument={handleImportDocument}
+        isImporting={isImporting}
       />
 
       {/* Main Content Area */}

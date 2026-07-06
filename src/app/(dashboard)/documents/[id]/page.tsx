@@ -63,11 +63,14 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
     }
   }
 
+  const isOwner = document.owner_id === profile.id;
+
   return (
     <TipTapEditor
       document={document}
       userEmail={profile.email}
       isEditable={isEditable}
+      isOwner={isOwner}
     />
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Folder, Share2, LogOut, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useState, useTransition, useRef } from "react";
+import { Folder, Share2, LogOut, ChevronLeft, ChevronRight, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils/cn";
@@ -13,6 +13,8 @@ interface SidebarProps {
   setActiveTab: (tab: "owned" | "shared") => void;
   onCreateDocument: () => void;
   isCreating: boolean;
+  onImportDocument: (title: string, content: unknown) => void;
+  isImporting: boolean;
 }
 
 export function Sidebar({
@@ -22,9 +24,81 @@ export function Sidebar({
   setActiveTab,
   onCreateDocument,
   isCreating,
+  onImportDocument,
+  isImporting,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const parsedContent = parseMarkdownToTipTap(text);
+      const title = file.name.replace(/\.[^/.]+$/, "");
+      onImportDocument(title, parsedContent);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const parseMarkdownToTipTap = (text: string) => {
+    const lines = text.split("\n");
+    const contentNodes: unknown[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) {
+        continue;
+      }
+
+      if (line.startsWith("# ")) {
+        contentNodes.push({
+          type: "heading",
+          attrs: { level: 1 },
+          content: [{ type: "text", text: line.slice(2) }],
+        });
+      } else if (line.startsWith("## ")) {
+        contentNodes.push({
+          type: "heading",
+          attrs: { level: 2 },
+          content: [{ type: "text", text: line.slice(3) }],
+        });
+      } else if (line.startsWith("### ")) {
+        contentNodes.push({
+          type: "heading",
+          attrs: { level: 3 },
+          content: [{ type: "text", text: line.slice(4) }],
+        });
+      } else if (line.startsWith("> ")) {
+        contentNodes.push({
+          type: "blockquote",
+          content: [{
+            type: "paragraph",
+            content: [{ type: "text", text: line.slice(2) }],
+          }],
+        });
+      } else {
+        contentNodes.push({
+          type: "paragraph",
+          content: [{ type: "text", text: line }],
+        });
+      }
+    }
+
+    return {
+      type: "doc",
+      content: contentNodes.length > 0 ? contentNodes : [{ type: "paragraph" }],
+    };
+  };
 
   const handleLogout = () => {
     startTransition(async () => {
@@ -63,11 +137,11 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Action Button */}
-      <div className="p-4">
+      {/* Action Buttons */}
+      <div className="p-4 space-y-2 shrink-0">
         <Button
           onClick={onCreateDocument}
-          disabled={isCreating}
+          disabled={isCreating || isImporting}
           className={cn(
             "w-full bg-gradient-to-r from-indigo-500 to-emerald-500 hover:from-indigo-600 hover:to-emerald-600 text-white font-medium shadow-lg shadow-indigo-500/10 transition-all duration-300",
             isCollapsed ? "h-9 w-9 p-0 rounded-xl" : "h-10 px-4 rounded-xl"
@@ -75,6 +149,27 @@ export function Sidebar({
         >
           <Plus size={18} className={cn(!isCollapsed && "mr-2")} />
           {!isCollapsed && (isCreating ? "Creating..." : "New Document")}
+        </Button>
+
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept=".txt,.md"
+          className="hidden"
+        />
+
+        <Button
+          onClick={handleImportClick}
+          disabled={isCreating || isImporting}
+          variant="outline"
+          className={cn(
+            "w-full border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-900/50 transition-all duration-300",
+            isCollapsed ? "h-9 w-9 p-0 rounded-xl" : "h-10 px-4 rounded-xl"
+          )}
+        >
+          <Upload size={18} className={cn(!isCollapsed && "mr-2")} />
+          {!isCollapsed && (isImporting ? "Importing..." : "Import Document")}
         </Button>
       </div>
 

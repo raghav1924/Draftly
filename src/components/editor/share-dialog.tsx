@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, useCallback } from "react";
 import { X, UserPlus, Trash2, User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,6 @@ import {
   type DocumentShareDetails,
 } from "@/lib/actions/shares";
 import type { SharePermission } from "@/types/database";
-import { cn } from "@/lib/utils/cn";
 
 interface ShareDialogProps {
   isOpen: boolean;
@@ -35,7 +34,7 @@ export function ShareDialog({
   const [isLoading, setIsLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
-  const loadShares = async () => {
+  const loadShares = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getDocumentShares(documentId);
@@ -45,7 +44,7 @@ export function ShareDialog({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [documentId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -53,7 +52,7 @@ export function ShareDialog({
       setEmail("");
       setPermission("viewer");
     }
-  }, [isOpen, documentId]);
+  }, [isOpen, loadShares]);
 
   // Handle escape key to close
   useEffect(() => {
